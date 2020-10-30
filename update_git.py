@@ -111,25 +111,6 @@ def merge(primary, secondary):
     return dict((str(key), primary.get(key) or secondary.get(key))
                 for key in set(secondary) | set(primary))
 
-def get_revert_commits():
-    revertedcommits = []
-    #repourl='https://github.com/' + repo_name
-    #leading_4_spaces = re.compile('^    ')
-    ##previous_release_date = datetime.prev_release_commit_date.date()
-    previous_commit_date = datetime.strptime(prev_release_commit_date, '%Y-%m-%d').date()
-    commits = get_commits()
-    for commit in commits:
-        thiscommit = commit['title']
-        reverted = re.match('^Revert "', thiscommit)
-        if reverted:
-            commitdatestr = commit['date']
-            date_time_str = ' '.join(commitdatestr.split(" ")[:-1])
-            commitdate = datetime.strptime(date_time_str, '%c').date()
-            if commitdate > previous_commit_date:
-                revertedcommit = re.search('.*This reverts commit ([A-Za-z0-9]*).*', commit['message'])
-                revertedcommits.append(revertedcommit.group(1))
-    return revertedcommits
-
 
 def get_commits():
     print("- Cloning repo, sorry, this could take a while")
@@ -196,16 +177,6 @@ if __name__ == '__main__':
     else:
         col_title_width = 60
     
-    # Delete config file if was dynaicall 
-    if 'docker_created_config' in locals():
-        docker_created_config = bool(args('--docker_created_config'))
-    else:
-        docker_created_config = bool(False)
-
-    if docker_created_config:
-        if args['--config'] and os.path.isfile(args['--config']):
-            os.remove("demofile.txt")
-
     prs_file = "prs.rst"
     cloned_repo_dir = '/tmp/repo'
     wip_features_table = PrettyTable(["PR Number", "Title", "Priority", "blank"])
@@ -244,10 +215,9 @@ if __name__ == '__main__':
         print("No starting point found via version tag or commit SHA")
         exit
 
-
-    print("Enumerating Open WIP PRs in master\n")
+    print("Enumerating Open PRs in master\n")
     print("- Retrieving Pull Request Issues from Github")
-    search_string = f"repo:apache/cloudstack is:open is:pr label:wip"
+    search_string = f"repo:apache/cloudstack is:open is:pr"
     issues = gh.search_issues(search_string)
     wip_features = 0
 
@@ -257,12 +227,49 @@ if __name__ == '__main__':
         label = []
         pr_num = str(pr.number)
         labels = pr.labels
-        if [l.name for l in labels if l.name=='wip' or l.name=='WIP']:
-            wip_features_table.add_row([pr_num, pr.title.strip(), "-", "-"]) 
-            print("-- Found open PR : " + pr_num + " with WIP label")
-            wip_features += 1
+        needed_labels = [type:bug, type:enhancement, type:experimental-feature, type:new-feature]
+        if labels not in needed_labels:
+            print("-- Found open PR : " + pr_num + " without recognised label")
+            print("--- Looking for bug text")
+            if = re.search('.*- [x] Bug fix *).*', issue['body']):
+                issue.add_to_labels(*labels)
+ 
+            if = re.search('.*- [x] Enhancement *).*', issue['body']):
+                add label
+            if = re.search('.*- [x] Breaking change *).*', issue['body']):
+                add label
+            if = re.search('.*- [x] New feature *).*', issue['body']):
+                add label
+            if = re.search('.*- [x] Cleanup *).*', issue['body']):
+                add label
 
-    print("\nEnumerating closed and merged PRs in master\n")
+
+
+
+
+(fix or feature that would cause existing functionality to change)
+(non-breaking change which adds functionality)
+- [ ] Bug fix (non-breaking change which fixes an issue)
+(improves an existing feature and functionality)
+- [ ] Cleanup 
+
+        reverted = re.match('^Revert "', thiscommit)
+        if reverted:
+            commitdatestr = commit['date']
+            date_time_str = ' '.join(commitdatestr.split(" ")[:-1])
+            commitdate = datetime.strptime(date_time_str, '%c').date()
+            if commitdate > previous_commit_date:
+                revertedcommit = re.search('.*This reverts commit ([A-Za-z0-9]*).*', commit['message'])
+
+
+
+
+
+
+
+
+
+    print("\nEnumerating open PRs in master\n")
 
     print("- Retrieving Pull Request Issues from Github")
     search_string = f"repo:apache/cloudstack is:closed is:pr is:merged merged:>={prev_release_commit_date}"
@@ -270,10 +277,6 @@ if __name__ == '__main__':
     features = 0
     fixes = 0
     uncategorised = 0
-
-    print("\nFinding reverted PRs")
-    reverted_shas = get_revert_commits()
-    print("- Found these reverted commits:\n", reverted_shas)
 
     print("\nProcessing Pull Request Issues\n")
     for issue in issues:

@@ -60,21 +60,13 @@ requires: python3.8 + docopt pygithub prettytable gitpython
 
 """
 
-from typing import DefaultDict
 import docopt
 import json
 from github import Github
-from prettytable import PrettyTable
 import os.path
-from os import path
 import re
 import sys
-import subprocess
-from datetime import datetime
-import subprocess
-import pygit2
-import shutil
-import array as arr
+
 
 def load_config():
     """
@@ -101,8 +93,6 @@ def load_config():
         sys.exit(__doc__)
     return args
 
-leading_4_spaces = re.compile('^    ')
-
 def merge(primary, secondary):
     """
     Merge two dictionaries.
@@ -111,50 +101,6 @@ def merge(primary, secondary):
     """
     return dict((str(key), primary.get(key) or secondary.get(key))
                 for key in set(secondary) | set(primary))
-
-
-def get_commits():
-    print("- Cloning repo, sorry, this could take a while")
-    dir_now = os.getcwd()
-    if path.isdir(cloned_repo_dir):
-        shutil.rmtree(cloned_repo_dir)
-    os.mkdir(cloned_repo_dir)
-    os.chdir(cloned_repo_dir)
-    repoClone = pygit2.clone_repository(repo.git_url, cloned_repo_dir, bare=True, checkout_branch=branch)
-    lines = subprocess.check_output(
-        ['git', 'log'], stderr=subprocess.STDOUT
-            ).decode("utf-8").split("\n")
-    commits = []
-    current_commit = {}
-    def save_current_commit():
-        title = current_commit['message'][0]
-        message = current_commit['message'][1:]
-        if message and message[0] == '':
-            del message[0]
-        current_commit['title'] = title
-        current_commit['message'] = '\n'.join(message)
-        commits.append(current_commit)
-    for line in lines:
-        if not line.startswith(' '):
-            if line.startswith('commit '):
-                if current_commit:
-                    save_current_commit()
-                    current_commit = {}
-                current_commit['hash'] = line.split('commit ')[1]
-            else:
-                try:
-                    key, value = line.split(':', 1)
-                    current_commit[key.lower()] = value.strip()
-                except ValueError:
-                    pass
-        else:
-            current_commit.setdefault(
-                'message', []
-            ).append(leading_4_spaces.sub('', line))
-    if current_commit:
-        save_current_commit()
-    os.chdir(dir_now)
-    return commits
 
 # run the code...
 if __name__ == '__main__':
@@ -165,123 +111,90 @@ if __name__ == '__main__':
     gh_token = args['--gh_token']
     gh = Github(gh_token)
     repo_name = args['--repo']
-    prev_release_ver = args['--prev_release_ver']
-    prev_release_commit = args['--prev_release_commit']
-    new_release_ver = args['--new_release_ver']
     branch = args['--branch']
-    
     gh_base_url = args['--gh_base_url']
-
-    # default column width to 60
-    if 'col_title_width' in locals():
-        col_title_width = int(args['--col_title_width'])
-    else:
-        col_title_width = 60
-    
-    prs_file = "prs.rst"
-    cloned_repo_dir = '/tmp/repo'
-    wip_features_table = PrettyTable(["PR Number", "Title", "Priority", "blank"])
-    fixes_table = PrettyTable(["PR Number", "Title", "Priority", "blank"]) 
-    features_table = PrettyTable(["PR Number", "Title", "Priority", "blank"])
-    dontknow_table = PrettyTable(["PR Number", "Title", "Priority", "blank"])
-    wip_features_table.align["Title"] = "l"
-    features_table.align["Title"] = "l"
-    fixes_table.align["Title"] = "l"
-    dontknow_table.align["Title"] = "l"
-    wip_features_table._max_width = {"Title":col_title_width}
-    features_table._max_width = {"Title":col_title_width}
-    fixes_table._max_width = {"Title":col_title_width}
-    dontknow_table._max_width = {"Title":col_title_width}
-    draft_pr_label = ['type:draft', 'gobbledegook']
+    draft_pr_label = "wip"
         
     repo = gh.get_repo(repo_name)
-
-    ## TODO - get commit -> commit date from tag on master.
-    ## Searching seems a waste
-
-    #repo_tags = repo.get_tags()
-
-    if prev_release_commit:
-        print("Previous Release Commit SHA found in conf file, skipping pre release SHA search.\n")
-        prev_release_sha = prev_release_commit
-    else:
-        print("Finding commit SHA for previous version " + prev_release_ver)
-        for tag in repo_tags:
-            if tag.name == prev_release_ver:
-                prev_release_sha = tag.commit.sha
-                #print(prev_release_sha)
-    commit = repo.get_commit(sha=prev_release_sha)
-    prev_release_commit_date=str(commit.commit.author.date.date())    #break
-
-    if not commit:
-        print("No starting point found via version tag or commit SHA")
-        exit
 
     print("Enumerating Open PRs in master\n")
     print("- Retrieving Pull Request Issues from Github")
     search_string = f"repo:paulangus/acs-github-trawler is:open is:pr"
     issues = gh.search_issues(search_string)
 
-    print("- Processing Open Pull Request Issues")
+    print("- Processing Open Pull Request Issues/n")
     updated_issuse = 0
     unmatched_issues = 0
     for issue in issues:
-
+        existing_labels = []
         label = []
         existing_label_names = []
         needed_label_names = ['type:bug', 'type:enhancement', 'type:experimental-feature', 'type:new-feature']
         label_matches = 0
-        pr = issue.repository.get_pull(issue.number)
+        text_matched = 0
 
+        pr = issue.repository.get_pull(issue.number)
         pr_num = str(pr.number)
+        is_draft = pr.draft
+        print("\n-- Checking pr#:" + pr_num + "\n")
         existing_labels = pr.labels
+        
         for label in existing_labels:
             existing_label_names.append(label.name)
             if label.name in needed_label_names:
                 label_matches += 1
-            if pr.draft:
-                if label.name not in draft_pr_label:
-                    print("-- Found open draft PR #: " + pr_num + " missing wip label - adding label")
-                    pr.add_to_labels("type:wip")
-            if not pr.draft:
-                if label in draft_pr_label:
-                    print("-- Found open draft PR #: " + pr_num + " with incorrect wip label - removing label")
-                    pr.remove_from_labels("type:wip")
-    
-        if label_matches == 0:
-            print("--- Found open PR : " + pr_num + " without recognised label")
-            print("--- Looking for bug text")
-            text_matched = 0
+        #print("-- checking draft status")
+        
+        if is_draft:
+            print(">>> PR is a draft")
+            if draft_pr_label not in existing_label_names:
+                print("*** Daft PR missing wip label - adding label")
+                pr.add_to_labels("wip")
+            else:
+                print("--- wip label found")
+        if not is_draft:
+            print(">>> PR is not a draft")
+            if draft_pr_label in existing_label_names:
+                print("*** PR with incorrect wip label - removing label")
+                pr.remove_from_labels("wip")
 
+        if label_matches == 0:
+            print(">>> PR has no recognised type label")
+            print("--- Looking for bug fix in description")
             if re.search('.*- \[x\] Bug fix .*', str(issue.body)):
                 text_matched += 1
-                print("bug fix text matched - adding label")
+                print("*** bug fix text matched - adding label")
                 pr.add_to_labels("type:bug")
 
+            print("--- Looking for Enhancement in description")
             if re.search('.*- \[x\] Enhancement .*', str(issue.body)):
                 text_matched += 1
-                print("Enhancement text matched - adding label")
+                print("*** Enhancement text matched - adding label")
                 pr.add_to_labels("type:enhancement")
 
+            print("--- Looking for breaking change in description")
             if re.search('.*- \[x\] Breaking change .*', str(issue.body)):
                 text_matched += 1
-                print("Breaking change text matched - adding label")
+                print("*** Breaking change text matched - adding label")
                 pr.add_to_labels("type:breaking_change")
 
+            print("--- Looking for New feature in description")
             if re.search('.*- \[x\] New feature .*', str(issue.body)):
                 text_matched += 1
-                print("New Feature text matched  - adding label")
+                print("*** New Feature text matched  - adding label")
                 pr.add_to_labels("type:new_feature")
 
+            print("--- Looking for clean up in description")
             if re.search('.*- \[x\] Cleanup .*', str(issue.body)):
                 text_matched += 1
-                print("Cleanup text matched - adding label")
-                pr.add_to_labels("type:enhancement")
-
-            if text_match == 1:
+                print("*** Cleanup text matched - adding label")
+                pr.add_to_labels("type:cleanup")
+            if text_matched > 0:
                 updated_issuse += 1
             else:
                 unmatched_issues += 1
-                print("No text matched in description")
+                print("---- No text matched in description *** BAD BAD BAD ***")
+        if label_matches > 0 and text_matched == 0:
+            print("---- Required labels found - no action required")
         else:
-            print("Required labels found - no action required")
+            print("---- All good now")

@@ -5,7 +5,7 @@
 # distributed with this work for additional information
 # regarding copyright ownership.  The ASF licenses this file
 # to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
+# "License"); you may not use this file except in compliance    
 # with the License.  You may obtain a copy of the License at
 #
 #   http://www.apache.org/licenses/LICENSE-2.0
@@ -74,6 +74,7 @@ from datetime import datetime
 import subprocess
 import pygit2
 import shutil
+import array as arr
 
 def load_config():
     """
@@ -110,25 +111,6 @@ def merge(primary, secondary):
     """
     return dict((str(key), primary.get(key) or secondary.get(key))
                 for key in set(secondary) | set(primary))
-
-def get_revert_commits():
-    revertedcommits = []
-    #repourl='https://github.com/' + repo_name
-    #leading_4_spaces = re.compile('^    ')
-    ##previous_release_date = datetime.prev_release_commit_date.date()
-    previous_commit_date = datetime.strptime(prev_release_commit_date, '%Y-%m-%d').date()
-    commits = get_commits()
-    for commit in commits:
-        thiscommit = commit['title']
-        reverted = re.match('^Revert "', thiscommit)
-        if reverted:
-            commitdatestr = commit['date']
-            date_time_str = ' '.join(commitdatestr.split(" ")[:-1])
-            commitdate = datetime.strptime(date_time_str, '%c').date()
-            if commitdate > previous_commit_date:
-                revertedcommit = re.search('.*This reverts commit ([A-Za-z0-9]*).*', commit['message'])
-                revertedcommits.append(revertedcommit.group(1))
-    return revertedcommits
 
 
 def get_commits():
@@ -196,16 +178,6 @@ if __name__ == '__main__':
     else:
         col_title_width = 60
     
-    # Delete config file if was dynaicall 
-    if 'docker_created_config' in locals():
-        docker_created_config = bool(args('--docker_created_config'))
-    else:
-        docker_created_config = bool(False)
-
-    if docker_created_config:
-        if args['--config'] and os.path.isfile(args['--config']):
-            os.remove("demofile.txt")
-
     prs_file = "prs.rst"
     cloned_repo_dir = '/tmp/repo'
     wip_features_table = PrettyTable(["PR Number", "Title", "Priority", "blank"])
@@ -244,10 +216,9 @@ if __name__ == '__main__':
         print("No starting point found via version tag or commit SHA")
         exit
 
-
-    print("Enumerating Open WIP PRs in master\n")
+    print("Enumerating Open PRs in master\n")
     print("- Retrieving Pull Request Issues from Github")
-    search_string = f"repo:apache/cloudstack is:open is:pr label:wip"
+    search_string = f"repo:paulangus/acs-github-trawler is:open is:pr"
     issues = gh.search_issues(search_string)
     wip_features = 0
 
@@ -255,64 +226,29 @@ if __name__ == '__main__':
     for issue in issues:
         pr = issue.repository.get_pull(issue.number)
         label = []
+        existing_label_names = []
+
         pr_num = str(pr.number)
-        labels = pr.labels
-        if [l.name for l in labels if l.name=='wip' or l.name=='WIP']:
-            wip_features_table.add_row([pr_num, pr.title.strip(), "-", "-"]) 
-            print("-- Found open PR : " + pr_num + " with WIP label")
-            wip_features += 1
-
-    print("\nEnumerating closed and merged PRs in master\n")
-
-    print("- Retrieving Pull Request Issues from Github")
-    search_string = f"repo:apache/cloudstack is:closed is:pr is:merged merged:>={prev_release_commit_date}"
-    issues = gh.search_issues(search_string)
-    features = 0
-    fixes = 0
-    uncategorised = 0
-
-    print("\nFinding reverted PRs")
-    reverted_shas = get_revert_commits()
-    print("- Found these reverted commits:\n", reverted_shas)
-
-    print("\nProcessing Pull Request Issues\n")
-    for issue in issues:
-        pr = issue.repository.get_pull(issue.number)
-        pr_commit_sha = pr.merge_commit_sha
-        if pr_commit_sha in reverted_shas:
-            print("- Skipping PR %s, its been reverted", pr.merge_commit_sha)
-        else:
-            label = []
-            pr_num = str(pr.number)
-            labels = pr.labels
-            if [l.name for l in labels if l.name=='type:new-feature' or l.name=='type:enhancement']:
-                features_table.add_row([pr_num, pr.title.strip(), "-", "-"]) 
-                print("-- Found PR: " + pr_num + " with feature label")
-                features += 1
-            if [l.name for l in labels if l.name=='type:bug' or l.name=='BUG']:
-                fixes_table.add_row([pr_num, pr.title.strip(), "-", "-"]) 
-                print("-- Found PR: " + pr_num + " with fix label")
-                fixes += 1
-            else:
-                print("-- Found PR: " + pr_num + " with no matching label")
-                dontknow_table.add_row([pr_num, pr.title.strip(), "-", "-"])
-                uncategorised += 1
-
-    print("\nwriting tables")
-    wip_features_table_txt = wip_features_table.get_string()
-    fixes_table_txt = fixes_table.get_string()
-    features_table_txt = features_table.get_string()
-    dontknow_table_txt = dontknow_table.get_string()
-    with open(prs_file ,"w") as file:
-        file.write('\nWork in Progress Features & Enhancements\n\n')
-        file.write(wip_features_table_txt)
-        file.write('\n%s Features listed\n\n' % str(wip_features))
-        file.write('New Features & Enhancements\n\n')
-        file.write(features_table_txt)
-        file.write('\n%s Features listed\n\nBug Fixes\n\n' % str(features))
-        file.write(fixes_table_txt)
-        file.write('\n%s Bugs listed\n\n' % str(fixes))
-        file.write(dontknow_table_txt)
-        file.write('\n%s uncategorised issues listed\n\n' % str(uncategorised))
-    file.close()
-    print(("\nTable has been output to %s\n\n" % prs_file))
+        existing_labels = pr.get_labels()
+        needed_label_names = ['type:bug', 'type:enhancement', 'type:experimental-feature', 'type:new-feature']
+        label_matches = 0
+        for label in existing_labels:
+            existing_label_names.append(label.name)
+            if label.name in needed_label_names:
+                label_matches += 1
+        if label_matches == 0:
+            print("-- Found open PR : " + pr_num + " without recognised label")
+            print("--- Looking for bug text")
+            #print(str(pr.body))
+            if re.search('.*- \[x\] Bug fix .*', str(issue.body)):
+                print("bug fix text matched - adding label")
+                existing_label_names.append("type:bug")
+                pr.set_labels(existing_label_names)
+            if re.search('.*- \[x\] Enhancement .*', str(issue.body)):
+              print("bug fix text matched")
+            if re.search('.*- \[x\] Breaking change .*', str(issue.body)):
+              print("bug fix text matched")  
+            if re.search('.*- \[x\] New feature .*', str(issue.body)):
+              print("bug fix text matched")  
+            if re.search('.*- \[x\] Cleanup .*', str(issue.body)):
+              print("bug fix text matched")

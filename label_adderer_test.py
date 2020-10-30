@@ -226,27 +226,28 @@ if __name__ == '__main__':
     updated_issuse = 0
     unmatched_issues = 0
     for issue in issues:
-        pr = issue.repository.get_pull(issue.number)
+
         label = []
         existing_label_names = []
-        pr_num = str(pr.number)
-        existing_labels = pr.get_labels()
-        if pr.draft:
-            for label in existing_labels:
-                if label.name not in draft_pr_label:
-                    print("-- Found open draft PR #: " + pr_num + " missing wip label - adding label")
-                    pr.add_to_labels("type:wip")
-        if not pr.draft:
-                if label.name in draft_pr_label:
-                    print("-- Found open draft PR #: " + pr_num + " with incorrect wip label - removing label")
-                    pr.remove_from_labels("type:wip")
-
         needed_label_names = ['type:bug', 'type:enhancement', 'type:experimental-feature', 'type:new-feature']
         label_matches = 0
+        pr = issue.repository.get_pull(issue.number)
+
+        pr_num = str(pr.number)
+        existing_labels = pr.labels
         for label in existing_labels:
             existing_label_names.append(label.name)
             if label.name in needed_label_names:
                 label_matches += 1
+            if pr.draft:
+                if label.name not in draft_pr_label:
+                    print("-- Found open draft PR #: " + pr_num + " missing wip label - adding label")
+                    pr.add_to_labels("type:wip")
+            if not pr.draft:
+                if label in draft_pr_label:
+                    print("-- Found open draft PR #: " + pr_num + " with incorrect wip label - removing label")
+                    pr.remove_from_labels("type:wip")
+    
         if label_matches == 0:
             print("--- Found open PR : " + pr_num + " without recognised label")
             print("--- Looking for bug text")
@@ -282,3 +283,5 @@ if __name__ == '__main__':
             else:
                 unmatched_issues += 1
                 print("No text matched in description")
+        else:
+            print("Required labels found - no action required")

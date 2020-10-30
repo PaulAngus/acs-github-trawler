@@ -192,7 +192,8 @@ if __name__ == '__main__':
     features_table._max_width = {"Title":col_title_width}
     fixes_table._max_width = {"Title":col_title_width}
     dontknow_table._max_width = {"Title":col_title_width}
-    
+    draft_pr_label = ['type:draft', 'gobbledegook']
+        
     repo = gh.get_repo(repo_name)
 
     ## TODO - get commit -> commit date from tag on master.
@@ -220,16 +221,26 @@ if __name__ == '__main__':
     print("- Retrieving Pull Request Issues from Github")
     search_string = f"repo:paulangus/acs-github-trawler is:open is:pr"
     issues = gh.search_issues(search_string)
-    wip_features = 0
 
     print("- Processing Open Pull Request Issues")
+    updated_issuse = 0
+    unmatched_issues = 0
     for issue in issues:
         pr = issue.repository.get_pull(issue.number)
         label = []
         existing_label_names = []
-
         pr_num = str(pr.number)
         existing_labels = pr.get_labels()
+        if pr.draft:
+            for label in existing_labels:
+                if label.name not in draft_pr_label:
+                    print("-- Found open draft PR #: " + pr_num + " missing wip label - adding label")
+                    pr.add_to_labels("type:wip")
+        if not pr.draft:
+                if label.name in draft_pr_label:
+                    print("-- Found open draft PR #: " + pr_num + " with incorrect wip label - removing label")
+                    pr.remove_from_labels("type:wip")
+
         needed_label_names = ['type:bug', 'type:enhancement', 'type:experimental-feature', 'type:new-feature']
         label_matches = 0
         for label in existing_labels:
@@ -237,18 +248,37 @@ if __name__ == '__main__':
             if label.name in needed_label_names:
                 label_matches += 1
         if label_matches == 0:
-            print("-- Found open PR : " + pr_num + " without recognised label")
+            print("--- Found open PR : " + pr_num + " without recognised label")
             print("--- Looking for bug text")
-            #print(str(pr.body))
+            text_matched = 0
+
             if re.search('.*- \[x\] Bug fix .*', str(issue.body)):
+                text_matched += 1
                 print("bug fix text matched - adding label")
-                existing_label_names.append("type:bug")
-                pr.set_labels(existing_label_names)
+                pr.add_to_labels("type:bug")
+
             if re.search('.*- \[x\] Enhancement .*', str(issue.body)):
-              print("bug fix text matched")
+                text_matched += 1
+                print("Enhancement text matched - adding label")
+                pr.add_to_labels("type:enhancement")
+
             if re.search('.*- \[x\] Breaking change .*', str(issue.body)):
-              print("bug fix text matched")  
+                text_matched += 1
+                print("Breaking change text matched - adding label")
+                pr.add_to_labels("type:breaking_change")
+
             if re.search('.*- \[x\] New feature .*', str(issue.body)):
-              print("bug fix text matched")  
+                text_matched += 1
+                print("New Feature text matched  - adding label")
+                pr.add_to_labels("type:new_feature")
+
             if re.search('.*- \[x\] Cleanup .*', str(issue.body)):
-              print("bug fix text matched")
+                text_matched += 1
+                print("Cleanup text matched - adding label")
+                pr.add_to_labels("type:enhancement")
+
+            if text_match == 1:
+                updated_issuse += 1
+            else:
+                unmatched_issues += 1
+                print("No text matched in description")

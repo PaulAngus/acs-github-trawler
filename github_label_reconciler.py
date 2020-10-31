@@ -160,8 +160,7 @@ if __name__ == '__main__':
             if draft_pr_label not in existing_label_names:
                 print("*** Daft PR missing wip label - adding label")
                 labels_to_add_table.add_row([pr_num, pr.title.strip(), "wip"])
-
-                if update_label:
+                if update_labels:
                     pr.add_to_labels("wip")
             else:
                 print("--- wip label found")
@@ -170,9 +169,8 @@ if __name__ == '__main__':
             prtype = 'PR'
             if draft_pr_label in existing_label_names:
                 print("*** PR with incorrect wip label - removing label")
-                print(prtype)
                 labels_to_add_table.add_row([pr_num, pr.title.strip(), "Remove wip"])
-                if update_label:
+                if update_labels:
                     pr.remove_from_labels("wip")
 
         if label_matches == 0:
@@ -182,7 +180,7 @@ if __name__ == '__main__':
                 text_matched += 1
                 print("*** bug fix text matched - adding label")
                 labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:bug"])
-                if update_label:
+                if update_labels:
                     pr.add_to_labels("type:bug")
 
             print("--- Looking for Enhancement in description")
@@ -190,7 +188,7 @@ if __name__ == '__main__':
                 text_matched += 1
                 print("*** Enhancement text matched - adding label")
                 labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:enhancement"])
-                if update_label:
+                if update_labels:
                     pr.add_to_labels("type:enhancement")
 
             print("--- Looking for breaking change in description")
@@ -198,7 +196,7 @@ if __name__ == '__main__':
                 text_matched += 1
                 print("*** Breaking change text matched - adding label")
                 labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:breaking_change"])
-                if update_label:
+                if update_labels:
                     pr.add_to_labels("type:breaking_change")
 
             print("--- Looking for New feature in description")
@@ -206,7 +204,7 @@ if __name__ == '__main__':
                 text_matched += 1
                 print("*** New Feature text matched  - adding label")
                 labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:new_feature"])
-                if update_label:
+                if update_labels:
                     pr.add_to_labels("type:new_feature")
 
             print("--- Looking for clean up in description")
@@ -214,7 +212,7 @@ if __name__ == '__main__':
                 text_matched += 1
                 print("*** Cleanup text matched - adding label")
                 labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:cleanup"])
-                if update_label:
+                if update_labels:
                     pr.add_to_labels("type:cleanup")
 
             if text_matched > 0:
@@ -226,8 +224,10 @@ if __name__ == '__main__':
 
         if label_matches > 0 and text_matched == 0:
             print("---- Required labels found - no action required")
+        elif label_matches > 0 and text_matched > 0:
+            print("---- All fixed now")
         else:
-            print("---- All good now")
+            print("---- This one's a problem")
 
     print("\nwriting tables")
     labels_to_add_txt = labels_to_add_table.get_string()
@@ -235,8 +235,8 @@ if __name__ == '__main__':
     with open(labels_file ,"w") as file:
         file.write('\nLabel updates to PRs\n\n')
         file.write(labels_to_add_txt)
-        file.write('\n%s PRs Updated\n\n' % str(updated_issues))
-        file.write('Issues without label or description\n')
+        file.write('\n%s PRs Updated\n\n\n' % str(updated_issues))
+        file.write('Issues without label and description\n')
         file.write(issues_without_label_or_description_txt)
         file.write('\n%s Unmatched PRs\n\n' % str(unmatched_issues))
     file.close()

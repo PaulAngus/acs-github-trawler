@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
     repo = gh.get_repo(repo_name)
     labels_to_add_table = PrettyTable(["PR Number", "Title", "New Label"])
-    issues_without_label_or_description_table = PrettyTable(["PR Number", "Title"]) 
+    issues_without_label_or_description_table = PrettyTable(["PR Number", "Title", "Type"]) 
     labels_file = "/tmp/labels"
 
     print("Enumerating Open PRs in master\n")
@@ -145,7 +145,7 @@ if __name__ == '__main__':
         pr = issue.repository.get_pull(issue.number)
         pr_num = str(pr.number)
         is_draft = pr.draft
-        print("\n-- Checking pr#:" + pr_num + "\n")
+        print("\n-- Checking pr#: " + pr_num + "\n")
         existing_labels = pr.labels
 
         for label in existing_labels:
@@ -156,76 +156,73 @@ if __name__ == '__main__':
         
         if is_draft:
             print(">>> PR is a draft")
+            prtype = 'Draft PR'
             if draft_pr_label not in existing_label_names:
                 print("*** Daft PR missing wip label - adding label")
+                labels_to_add_table.add_row([pr_num, pr.title.strip(), "wip"])
+
                 if update_label:
                     pr.add_to_labels("wip")
-                else:
-                    labels_to_add_table.add_row([pr_num, pr.title.strip(), "wip"])
             else:
                 print("--- wip label found")
         if not is_draft:
             print(">>> PR is not a draft")
+            prtype = 'PR'
             if draft_pr_label in existing_label_names:
                 print("*** PR with incorrect wip label - removing label")
+                print(prtype)
+                labels_to_add_table.add_row([pr_num, pr.title.strip(), "Remove wip"])
                 if update_label:
                     pr.remove_from_labels("wip")
-                else:
-                    labels_to_add_table.add_row([pr_num, pr.title.strip(), "Remove wip"])
 
         if label_matches == 0:
             print(">>> PR has no recognised type label")
-            print("--- Looking for bug fix in description")
+            print("--- Looking for bug fix in descr iption")
             if re.search('.*- \[x\] Bug fix .*', str(issue.body)):
                 text_matched += 1
                 print("*** bug fix text matched - adding label")
+                labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:bug"])
                 if update_label:
                     pr.add_to_labels("type:bug")
-                else:
-                    labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:bug"])
 
             print("--- Looking for Enhancement in description")
             if re.search('.*- \[x\] Enhancement .*', str(issue.body)):
                 text_matched += 1
                 print("*** Enhancement text matched - adding label")
+                labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:enhancement"])
                 if update_label:
                     pr.add_to_labels("type:enhancement")
-                else:
-                    labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:enhancement"])
 
             print("--- Looking for breaking change in description")
             if re.search('.*- \[x\] Breaking change .*', str(issue.body)):
                 text_matched += 1
                 print("*** Breaking change text matched - adding label")
+                labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:breaking_change"])
                 if update_label:
                     pr.add_to_labels("type:breaking_change")
-                else:
-                    labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:breaking_change"])
 
             print("--- Looking for New feature in description")
             if re.search('.*- \[x\] New feature .*', str(issue.body)):
                 text_matched += 1
                 print("*** New Feature text matched  - adding label")
+                labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:new_feature"])
                 if update_label:
                     pr.add_to_labels("type:new_feature")
-                else:
-                    labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:new_feature"])
 
             print("--- Looking for clean up in description")
             if re.search('.*- \[x\] Cleanup .*', str(issue.body)):
                 text_matched += 1
                 print("*** Cleanup text matched - adding label")
+                labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:cleanup"])
                 if update_label:
                     pr.add_to_labels("type:cleanup")
-                else:
-                    labels_to_add_table.add_row([pr_num, pr.title.strip(), "type:cleanup"])
 
             if text_matched > 0:
                 updated_issues += 1
             else:
                 unmatched_issues += 1
                 print("---- No text matched in description *** BAD BAD BAD ***")
-                issues_without_label_or_description_table.add_row([pr_num, pr.title.strip()])
+                issues_without_label_or_description_table.add_row([pr_num, pr.title.strip(), prtype ])
 
         if label_matches > 0 and text_matched == 0:
             print("---- Required labels found - no action required")
@@ -244,4 +241,4 @@ if __name__ == '__main__':
         file.write('\n%s Unmatched PRs\n\n' % str(unmatched_issues))
     file.close()
     print(("\nTable has been output to %s\n\n" % labels_file))
-    
+

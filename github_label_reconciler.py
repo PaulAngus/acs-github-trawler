@@ -88,7 +88,7 @@ def load_config():
             args = merge(args, json_args)
     #     since we are here, check that the required fields exist
     valid_input = True
-    for arg in ['--gh_token', '--prev_release_ver', '--branch', '--repo', '--new_release_ver']:
+    for arg in ['--gh_token', '--branch', '--repo']:
         if not args[arg] or (isinstance(args[arg], list) and not args[arg][0]):
             print(("ERROR: %s is required" % arg))
             valid_input = False

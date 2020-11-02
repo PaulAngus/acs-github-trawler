@@ -121,7 +121,6 @@ def label_reconcile(label_string, text_string):
     #print('--- Looking for ' + text_string + ' in description')
     if re.search(search_string, str(issue.body)):
         issue_desc_exist += 1
-        print("*** '" + text_string + "' found in description")
         if label_string in existing_label_names:
             issue_label_exist += 1
             issue_matched += 1
@@ -130,17 +129,12 @@ def label_reconcile(label_string, text_string):
             missing_labels += 1
             issue_labels_mismatch += 1
     else:
-        print("not in desc")
         if label_string in existing_label_names:
             issue_label_exist += 1
             issue_labels_mismatch += 1
         else:
-            print("no match")
             no_match += 1
-    
-    print(label_string + " " + text_string)
-    print("existing labels: " + str(existing_label_names))
-    print("missing labels; " + str(missing_labels) + "  issue lable exists: " + str(issue_label_exist) + "  no match: " + str(no_match) + "  desc exists: " + str(issue_desc_exist) + " labels mismatch: "+ str(issue_labels_mismatch) + " match " + str(issue_matched) + "\n")
+
 
 # run the code...
 if __name__ == '__main__':
@@ -187,7 +181,6 @@ if __name__ == '__main__':
                       "type:breaking_change": "Breaking change"}
 
         issue_matched = 0
-        issue_labels_added = 0
         issue_labels_mismatch = 0
         issue_all_bad = 0
         bad_issue_count = 0
@@ -200,28 +193,26 @@ if __name__ == '__main__':
         pr = issue.repository.get_pull(issue.number)
         pr_num = str(pr.number)
         is_draft = pr.draft
-        print("\n-- Checking pr#: " + pr_num + "\n")
+        print("\n---- Checking pr#: " + pr_num)
         existing_labels = pr.labels
 
         for label in existing_labels:
             existing_label_names.append(label.name)
         
         if is_draft:
-            print(">>> PR is a draft")
             prtype = 'Draft PR'
             if draft_pr_label not in existing_label_names:
-                print("*** Daft PR missing wip label - adding label")
+                print("** Daft PR missing wip label - adding label")
                 labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "wip"])
+                labels_added =+ 1
                 if update_labels:
                     pr.add_to_labels("wip")
-            else:
-                print("--- wip label found")
         if not is_draft:
-            print(">>> PR is not a draft")
             prtype = 'PR'
             if draft_pr_label in existing_label_names:
-                print("*** PR with incorrect wip label - removing label")
+                print("** PR with incorrect wip label - removing label")
                 labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Remove wip"])
+                labels_added =+ 1
                 if update_labels:
                     pr.remove_from_labels("wip")
 
@@ -230,7 +221,7 @@ if __name__ == '__main__':
 
         if issue_matched > 0:
             issue_matched += 1
-            print("---- Required label found - no action required")
+            print("-- Required 'type:' label found - no action required")
         else:
             if issue_desc_exist > 0 and issue_label_exist > 0:
                 labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "label/description mismatch"])
@@ -240,18 +231,18 @@ if __name__ == '__main__':
                 labels_added += 1
                 add_label_res = 'label ' + label_to_add + ' added'
                 labels_added_table.add_row([pr_num, pr.title.strip(), prtype, add_label_res])
-                issue_labels_added += 1
+                labels_added += 1
                 if update_labels:
                     pr.add_to_labels(label_to_add)
 
             elif no_match == len(label_names):
-                issue_all_bad += 1
+                labels_all_bad += 1
                 labels_all_bad_table.add_row([pr_num, pr.title.strip(), prtype, "No label or description"])
-                print("**** no type lables or type in description")
+                print("** no type lables or type in description")
             
             if update_labels:
                 pr.add_to_labels(label_string)
-                print("**** Label was missing but all fixed now")
+                print("** Label was missing but all fixed now")
 
     print("\nwriting tables")
     labels_to_add_txt = labels_added_table.get_string()

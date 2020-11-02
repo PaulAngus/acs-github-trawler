@@ -239,10 +239,6 @@ if __name__ == '__main__':
                 labels_all_bad += 1
                 labels_all_bad_table.add_row([pr_num, pr.title.strip(), prtype, "No label or description"])
                 print("** no type lables or type in description")
-            
-            if update_labels:
-                pr.add_to_labels(label_string)
-                print("** Label was missing but all fixed now")
 
     print("\nwriting tables")
     labels_to_add_txt = labels_added_table.get_string()

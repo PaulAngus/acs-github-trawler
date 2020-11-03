@@ -292,7 +292,7 @@ if __name__ == '__main__':
         file.write(labels_all_bad_txt)
         file.write('\n%s Unmatched PRs\n\n' % str(labels_all_bad))
     file.close()
-    with file.open(labels_file ,"r") as file:
+    with open(labels_file ,"r") as file:
         print(file.read())
     file.close()
     print(("\nTable has been output to %s\n\n" % labels_file))

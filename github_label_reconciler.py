@@ -216,18 +216,18 @@ if __name__ == '__main__':
             prtype = 'Draft PR'
             if draft_pr_label not in existing_label_names:
                 print("---- Daft PR missing wip label - adding label")
-                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Label 'wip' added"])
+                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Label 'status:work-in-progress' added"])
                 labels_added += 1
                 if update_labels:
-                    pr.add_to_labels("wip")
+                    pr.add_to_labels("status:work-in-progress")
         if not is_draft:
             prtype = 'PR'
             if draft_pr_label in existing_label_names:
                 print("---- PR with incorrect wip label - removing label")
-                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Label 'wip' removed"])
+                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Label 'status:work-in-progress' removed"])
                 labels_added += 1
                 if update_labels:
-                    pr.remove_from_labels("wip")
+                    pr.remove_from_labels("status:work-in-progress")
 
         for label_name in label_names:
             label_reconcile(label_name, label_names[label_name])

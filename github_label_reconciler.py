@@ -161,12 +161,15 @@ if __name__ == '__main__':
     labels_mismatch_table = PrettyTable(["PR Number", "Title", "PR Type", "Result"])
     labels_added_table.align["Title"] = "l"
     labels_added_table.align["Result"] = "l"
+    labels_added_table.align["PR Type"] = "l"
     labels_added_table._max_width = {"Title":col_title_width}
     labels_all_bad_table.align["Title"] = "l"
     labels_all_bad_table.align["Result"] = "l"
+    labels_added_table.align["PR Type"] = "l"
     labels_all_bad_table._max_width = {"Title":col_title_width}
     labels_mismatch_table.align["Title"] = "l"
     labels_mismatch_table.align["Result"] = "l"
+    labels_added_table.align["PR Type"] = "l"
     labels_mismatch_table._max_width = {"Title":col_title_width}
 
     labels_file = "./labels"
@@ -247,13 +250,13 @@ if __name__ == '__main__':
             elif no_match == len(label_names):
                 labels_all_bad += 1
                 labels_all_bad_table.add_row([pr_num, pr.title.strip(), prtype, "No label or description"])
-                print("** no type lables or type in description")
+                print("** no type labels or type in description")
 
     print("\nwriting tables")
     labels_to_add_txt = labels_added_table.get_string()
     labels_all_bad_txt = labels_all_bad_table.get_string()
     mismatched_labels_txt = labels_mismatch_table.get_string()
-    report_title = 'Results of ' + repo_name + ' open PR lable trawling\n'
+    report_title = 'Results of ' + repo_name + ' open PR label trawling\n'
     underline_length = len(report_title)
     underline = '=' * underline_length
 
@@ -262,7 +265,7 @@ if __name__ == '__main__':
         file.write(report_title)
         file.write(underline)
 
-        file.write('\n\n%sPR labels matched: \n\n' % str(labels_matched))
+        file.write('\n\n%s PR labels matched \n\n' % str(labels_matched))
 
         file.write('\nLabels Updated in PRs:\n\n')
         file.write(labels_to_add_txt)

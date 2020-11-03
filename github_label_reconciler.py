@@ -115,18 +115,18 @@ def label_reconcile(label_string, text_string):
     global issue_desc_exist
     global issue_label_exist
     global label_to_add
-    global missing_labels
+    global issue_missing_labels
 
     search_string = '.*- \[ ?x ?\] ' + text_string + ' .*'
     #print('--- Looking for ' + text_string + ' in description')
-    if re.search(search_string, str(issue.body)):
+    if re.search(search_string, str(issue.body), re.I):
         issue_desc_exist += 1
         if label_string in existing_label_names:
             issue_label_exist += 1
             issue_matched += 1
         else:
             label_to_add = label_string
-            missing_labels += 1
+            issue_missing_labels += 1
             issue_labels_mismatch += 1
     else:
         if label_string in existing_label_names:
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     labels_all_bad = 0
     labels_matched = 0
 
-    print("Enumerating Open PRs in '" + repo_name+ "'\n")
+    print("Enumerating Open PRs in '" + repo_name + "' \n")
     print("- Retrieving Pull Request Issues from Github")
     search_string = f"repo:" + repo_name + " is:open is:pr"
     issues = gh.search_issues(search_string)
@@ -201,12 +201,12 @@ if __name__ == '__main__':
         issue_desc_exist = 0
         issue_label_exist = 0
         label_to_add = ''
-        missing_labels = 0
+        issue_missing_labels = 0
 
         pr = issue.repository.get_pull(issue.number)
         pr_num = str(pr.number)
         is_draft = pr.draft
-        print("\n---- Checking pr#: " + pr_num)
+        print("\n-- Checking pr#: " + pr_num)
         existing_labels = pr.labels
 
         for label in existing_labels:
@@ -215,7 +215,7 @@ if __name__ == '__main__':
         if is_draft:
             prtype = 'Draft PR'
             if draft_pr_label not in existing_label_names:
-                print("** Daft PR missing wip label - adding label")
+                print("---- Daft PR missing wip label - adding label")
                 labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Label 'wip' added"])
                 labels_added += 1
                 if update_labels:
@@ -223,7 +223,7 @@ if __name__ == '__main__':
         if not is_draft:
             prtype = 'PR'
             if draft_pr_label in existing_label_names:
-                print("** PR with incorrect wip label - removing label")
+                print("---- PR with incorrect wip label - removing label")
                 labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Label 'wip' removed"])
                 labels_added += 1
                 if update_labels:
@@ -232,25 +232,38 @@ if __name__ == '__main__':
         for label_name in label_names:
             label_reconcile(label_name, label_names[label_name])
 
-        if issue_matched > 0:
+        # DEBUG -- print("labels: " + str(issue_label_exist) + "  desc: " + str(issue_desc_exist) + " no_matches: " + str(no_match) + " matches :" + str(issue_matched) + " missing labels: " + str(issue_missing_labels))
+        if issue_matched == 1:
             labels_matched += 1
-            print("-- Required 'type:' label found - no action required")
+            print("---- Matching 'type' label found - no action")
         else:
-            if issue_desc_exist > 0 and issue_label_exist > 0:
+            if issue_desc_exist > 1 or issue_label_exist > 1:
+                print("---- Too many label or description matches")
                 labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label/description mismatch"])
                 labels_mismatched += 1
-                    
-            elif missing_labels == 1:
-                labels_added += 1
-                add_label_res = "Label '" + label_to_add + "' added"
-                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, add_label_res])
-                if update_labels:
-                    pr.add_to_labels(label_to_add)
+            else:
+                if issue_desc_exist > 0 and issue_label_exist > 0:
+                    print("---- Label and description don't match")
+                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label/description mismatch"])
+                    labels_mismatched += 1
+                elif (issue_label_exist > 0 and issue_desc_exist == 0):
+                    print("---- Label without description")
+                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label without description"])
+                    labels_mismatched += 1
+                elif issue_missing_labels == 1:
+                    labels_added += 1
+                    add_label_res = "---- Label '" + label_to_add + "' added"
+                    print(add_label_res)
+                    labels_added_table.add_row([pr_num, pr.title.strip(), prtype, add_label_res])
+                    if update_labels:
+                        pr.add_to_labels(label_to_add)
 
-            elif no_match == len(label_names):
-                labels_all_bad += 1
-                labels_all_bad_table.add_row([pr_num, pr.title.strip(), prtype, "No label or description"])
-                print("** no type labels or type in description")
+                elif no_match == len(label_names):
+                    labels_all_bad += 1
+                    labels_all_bad_table.add_row([pr_num, pr.title.strip(), prtype, "No label or description"])
+                    print("---- no type labels or type in description")
+                else:
+                    print("---- Something went wrong, I'm confused")
 
     print("\nwriting tables")
     labels_to_add_txt = labels_added_table.get_string()
@@ -273,11 +286,14 @@ if __name__ == '__main__':
 
         file.write('\nPR with label not matching description:\n\n')
         file.write(mismatched_labels_txt)
-        file.write('\n%s PRs Updated\n\n\n' % str(labels_mismatched))
+        file.write('\n%s PRs found\n\n\n' % str(labels_mismatched))
 
         file.write('PRs without label or description\n\n')
         file.write(labels_all_bad_txt)
         file.write('\n%s Unmatched PRs\n\n' % str(labels_all_bad))
+    file.close()
+    with file.open(labels_file ,"r") as file:
+        print(file.read())
     file.close()
     print(("\nTable has been output to %s\n\n" % labels_file))
 

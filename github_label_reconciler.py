@@ -153,22 +153,32 @@ if __name__ == '__main__':
         update_labels = bool(args['--update_labels'])
     else:
         update_labels = bool(False)
+    col_title_width = 60
 
     repo = gh.get_repo(repo_name)
     labels_added_table = PrettyTable(["PR Number", "Title", "PR Type", "Result"])
     labels_all_bad_table = PrettyTable(["PR Number", "Title", "PR Type", "Result"]) 
     labels_mismatch_table = PrettyTable(["PR Number", "Title", "PR Type", "Result"])
+    labels_added_table.align["Title"] = "l"
+    labels_added_table.align["Result"] = "l"
+    labels_added_table._max_width = {"Title":col_title_width}
+    labels_all_bad_table.align["Title"] = "l"
+    labels_all_bad_table.align["Result"] = "l"
+    labels_all_bad_table._max_width = {"Title":col_title_width}
+    labels_mismatch_table.align["Title"] = "l"
+    labels_mismatch_table.align["Result"] = "l"
+    labels_mismatch_table._max_width = {"Title":col_title_width}
 
-    labels_file = "/tmp/labels"
+    labels_file = "./labels"
 
     labels_added = 0
     labels_mismatched = 0
     labels_all_bad = 0
-    issue_matched = 0
+    labels_matched = 0
 
-    print("Enumerating Open PRs in master\n")
+    print("Enumerating Open PRs in '" + repo_name+ "'\n")
     print("- Retrieving Pull Request Issues from Github")
-    search_string = f"repo:paulangus/acs-github-trawler is:open is:pr"
+    search_string = f"repo:" + repo_name + " is:open is:pr"
     issues = gh.search_issues(search_string)
 
     print("- Processing Open Pull Request Issues/n")
@@ -203,16 +213,16 @@ if __name__ == '__main__':
             prtype = 'Draft PR'
             if draft_pr_label not in existing_label_names:
                 print("** Daft PR missing wip label - adding label")
-                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "wip"])
-                labels_added =+ 1
+                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Label 'wip' added"])
+                labels_added += 1
                 if update_labels:
                     pr.add_to_labels("wip")
         if not is_draft:
             prtype = 'PR'
             if draft_pr_label in existing_label_names:
                 print("** PR with incorrect wip label - removing label")
-                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Remove wip"])
-                labels_added =+ 1
+                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Label 'wip' removed"])
+                labels_added += 1
                 if update_labels:
                     pr.remove_from_labels("wip")
 
@@ -220,18 +230,17 @@ if __name__ == '__main__':
             label_reconcile(label_name, label_names[label_name])
 
         if issue_matched > 0:
-            issue_matched += 1
+            labels_matched += 1
             print("-- Required 'type:' label found - no action required")
         else:
             if issue_desc_exist > 0 and issue_label_exist > 0:
-                labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "label/description mismatch"])
+                labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label/description mismatch"])
                 labels_mismatched += 1
                     
             elif missing_labels == 1:
                 labels_added += 1
-                add_label_res = 'label ' + label_to_add + ' added'
+                add_label_res = "Label '" + label_to_add + "' added"
                 labels_added_table.add_row([pr_num, pr.title.strip(), prtype, add_label_res])
-                labels_added += 1
                 if update_labels:
                     pr.add_to_labels(label_to_add)
 
@@ -244,19 +253,26 @@ if __name__ == '__main__':
     labels_to_add_txt = labels_added_table.get_string()
     labels_all_bad_txt = labels_all_bad_table.get_string()
     mismatched_labels_txt = labels_mismatch_table.get_string()
+    report_title = 'Results of ' + repo_name + ' open PR lable trawling\n'
+    underline_length = len(report_title)
+    underline = '=' * underline_length
+
 
     with open(labels_file ,"w") as file:
-        file.write('\n%s PR labels matched\n\n\n' % str(issue_matched))
+        file.write(report_title)
+        file.write(underline)
 
-        file.write('\nLabels added to PRs\n\n')
+        file.write('\n\n%sPR labels matched: \n\n' % str(labels_matched))
+
+        file.write('\nLabels Updated in PRs:\n\n')
         file.write(labels_to_add_txt)
         file.write('\n%s PRs Updated\n\n\n' % str(labels_added))
 
-        file.write('\nPR with label not matching description\n\n')
+        file.write('\nPR with label not matching description:\n\n')
         file.write(mismatched_labels_txt)
         file.write('\n%s PRs Updated\n\n\n' % str(labels_mismatched))
 
-        file.write('Issues without label or description\n')
+        file.write('PRs without label or description\n\n')
         file.write(labels_all_bad_txt)
         file.write('\n%s Unmatched PRs\n\n' % str(labels_all_bad))
     file.close()

@@ -306,28 +306,28 @@ if __name__ == '__main__':
         else:
             if issue_desc_exist > 1 or issue_label_exist > 1:
                 print("---- Too many label or description matches")
-                labels_mismatch_table.add_row([pr_num, pr.title.strip(), "prtype", "Label/description mismatch"])
+                labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label/description mismatch"])
                 labels_mismatched += 1
             else:
                 if issue_desc_exist > 0 and issue_label_exist > 0:
                     print("---- Label and description don't match")
-                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), "prtype", "Label/description mismatch"])
+                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label/description mismatch"])
                     labels_mismatched += 1
                 elif (issue_label_exist > 0 and issue_desc_exist == 0):
                     print("---- Label without description")
-                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), "prtype", "Label without description"])
+                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label without description"])
                     labels_mismatched += 1
                 elif issue_missing_labels == 1:
                     labels_added += 1
                     add_label_res = "---- Label '" + label_to_add + "' added"
                     print(add_label_res)
-                    labels_added_table.add_row([pr_num, pr.title.strip(), "prtype", add_label_res])
+                    labels_added_table.add_row([pr_num, pr.title.strip(), prtype, add_label_res])
                     if update_labels:
                         pr.add_to_labels(label_to_add)
 
                 elif no_match == len(label_names):
                     labels_all_bad += 1
-                    labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "No label or description"])
+                    labels_all_bad_table.add_row([pr_num, pr.title.strip(), prtype, "No label or description"])
                     print("---- no type labels or type in description")
                 else:
                     print("---- Something went wrong, I'm confused")

@@ -283,7 +283,7 @@ if __name__ == '__main__':
             prtype = 'Draft PR'
             if draft_pr_label not in existing_label_names:
                 print("---- Daft PR missing wip label - adding label")
-                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Label 'status:work-in-progress' added"])
+                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "WIP label added"])
                 labels_added += 1
                 if update_labels:
                     pr.add_to_labels("status:work-in-progress")
@@ -291,7 +291,7 @@ if __name__ == '__main__':
             prtype = 'PR'
             if draft_pr_label in existing_label_names:
                 print("---- PR with incorrect wip label - removing label")
-                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "Label 'status:work-in-progress' removed"])
+                labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "WIP label removed"])
                 labels_added += 1
                 if update_labels:
                     pr.remove_from_labels("status:work-in-progress")
@@ -319,7 +319,7 @@ if __name__ == '__main__':
                     labels_mismatched += 1
                 elif issue_missing_labels == 1:
                     labels_added += 1
-                    add_label_res = "---- Label '" + label_to_add + "' added"
+                    add_label_res =  "label '" + label_to_add[5:] + "' added"
                     print(add_label_res)
                     labels_added_table.add_row([pr_num, pr.title.strip(), prtype, add_label_res])
                     if update_labels:
@@ -367,15 +367,15 @@ if __name__ == '__main__':
         if len(labels) == 0:
             print("-- Found PR: " + pr_num + " with no labels")
             labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "No labels"])
-            uncategorised += 1
+            labels_all_bad += 1
         elif match_found == 0:
             print("-- Found PR: " + pr_num + " with no matching label")
             labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "No label match"])
-            uncategorised += 1
+            labels_all_bad += 1
         if match_found > 1:
             print("-- Found PR: " + pr_num + " with too many labels")
             labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "Too many labels"])
-            uncategorised += 1
+            labels_all_bad += 1
 
 
 

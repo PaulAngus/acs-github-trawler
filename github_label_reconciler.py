@@ -135,6 +135,49 @@ def label_reconcile(label_string, text_string):
         else:
             no_match += 1
 
+def get_commits():
+    print("- Cloning repo, sorry, this could take a while")
+    dir_now = os.getcwd()
+    if path.isdir(cloned_repo_dir):
+        shutil.rmtree(cloned_repo_dir)
+    os.mkdir(cloned_repo_dir)
+    os.chdir(cloned_repo_dir)
+    repoClone = pygit2.clone_repository(repo.git_url, cloned_repo_dir, bare=True, checkout_branch=branch)
+    lines = subprocess.check_output(
+        ['git', 'log'], stderr=subprocess.STDOUT
+            ).decode("utf-8").split("\n")
+    commits = []
+    current_commit = {}
+    def save_current_commit():
+        title = current_commit['message'][0]
+        message = current_commit['message'][1:]
+        if message and message[0] == '':
+            del message[0]
+        current_commit['title'] = title
+        current_commit['message'] = '\n'.join(message)
+        commits.append(current_commit)
+    for line in lines:
+        if not line.startswith(' '):
+            if line.startswith('commit '):
+                if current_commit:
+                    save_current_commit()
+                    current_commit = {}
+                current_commit['hash'] = line.split('commit ')[1]
+            else:
+                try:
+                    key, value = line.split(':', 1)
+                    current_commit[key.lower()] = value.strip()
+                except ValueError:
+                    pass
+        else:
+            current_commit.setdefault(
+                'message', []
+            ).append(leading_4_spaces.sub('', line))
+    if current_commit:
+        save_current_commit()
+    os.chdir(dir_now)
+    return commits
+
 
 # run the code...
 if __name__ == '__main__':
@@ -147,6 +190,8 @@ if __name__ == '__main__':
     repo_name = args['--repo']
     branch = args['--branch']
     gh_base_url = args['--gh_base_url']
+    prev_release_ver = args['--prev_release_ver']
+    prev_release_commit = args['--prev_release_commit']
     draft_pr_label = "wip"
     update_labels = args['--update_labels']
     if update_labels != '':
@@ -179,6 +224,28 @@ if __name__ == '__main__':
     labels_all_bad = 0
     labels_matched = 0
 
+    ## TODO - get commit -> commit date from tag on master.
+    ## Searching seems a waste
+
+    #repo_tags = repo.get_tags()
+
+    if prev_release_commit:
+        print("Previous Release Commit SHA found in conf file, skipping pre release SHA search.\n")
+        prev_release_sha = prev_release_commit
+    else:
+        print("Finding commit SHA for previous version " + prev_release_ver)
+        for tag in repo_tags:
+            if tag.name == prev_release_ver:
+                prev_release_sha = tag.commit.sha
+                #print(prev_release_sha)
+    commit = repo.get_commit(sha=prev_release_sha)
+    prev_release_commit_date=str(commit.commit.author.date.date())    #break
+
+    if not commit:
+        print("No starting point found via version tag or commit SHA")
+        exit
+
+
     print("Enumerating Open PRs in '" + repo_name + "' \n")
     print("- Retrieving Pull Request Issues from Github")
     search_string = f"repo:" + repo_name + " is:open is:pr"
@@ -206,7 +273,7 @@ if __name__ == '__main__':
         pr = issue.repository.get_pull(issue.number)
         pr_num = str(pr.number)
         is_draft = pr.draft
-        print("\n-- Checking pr#: " + pr_num)
+        print("\n-- Checking OPEN pr#: " + pr_num)
         existing_labels = pr.labels
 
         for label in existing_labels:
@@ -239,31 +306,78 @@ if __name__ == '__main__':
         else:
             if issue_desc_exist > 1 or issue_label_exist > 1:
                 print("---- Too many label or description matches")
-                labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label/description mismatch"])
+                labels_mismatch_table.add_row([pr_num, pr.title.strip(), "prtype", "Label/description mismatch"])
                 labels_mismatched += 1
             else:
                 if issue_desc_exist > 0 and issue_label_exist > 0:
                     print("---- Label and description don't match")
-                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label/description mismatch"])
+                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), "prtype", "Label/description mismatch"])
                     labels_mismatched += 1
                 elif (issue_label_exist > 0 and issue_desc_exist == 0):
                     print("---- Label without description")
-                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label without description"])
+                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), "prtype", "Label without description"])
                     labels_mismatched += 1
                 elif issue_missing_labels == 1:
                     labels_added += 1
                     add_label_res = "---- Label '" + label_to_add + "' added"
                     print(add_label_res)
-                    labels_added_table.add_row([pr_num, pr.title.strip(), prtype, add_label_res])
+                    labels_added_table.add_row([pr_num, pr.title.strip(), "prtype", add_label_res])
                     if update_labels:
                         pr.add_to_labels(label_to_add)
 
                 elif no_match == len(label_names):
                     labels_all_bad += 1
-                    labels_all_bad_table.add_row([pr_num, pr.title.strip(), prtype, "No label or description"])
+                    labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "No label or description"])
                     print("---- no type labels or type in description")
                 else:
                     print("---- Something went wrong, I'm confused")
+
+    print("\nEnumerating MERGED PRs in master\n")
+
+    print("- Retrieving Pull Request Issues from Github")
+    search_string = f"repo:apache/cloudstack is:merged merged:>={prev_release_commit_date}"
+    issues = gh.search_issues(search_string)
+    features = 0
+    fixes = 0
+    uncategorised = 0
+    enhancements = 0
+    match_found = 0
+
+
+    print("\nProcessing Merged Pull Request Issues\n")
+    for issue in issues:
+        match_found = 0
+        pr = issue.repository.get_pull(issue.number)
+        pr_commit_sha = pr.merge_commit_sha
+        label = []
+        pr_num = str(pr.number)
+        labels = pr.labels
+        if [l.name for l in labels if l.name == 'type:new-feature']:
+            print("-- Found PR: " + pr_num + " with feature label")
+            match_found += 1
+            features += 1
+        if [l.name for l in labels if l.name == 'type:bug' or l.name == 'type:cleanup']:
+            print("-- Found PR: " + pr_num + " with bug or cleanup label")
+            fixes += 1
+            match_found += 1
+        if [l.name for l in labels if l.name=='l.name' == 'type:enhancement']:
+            print("-- Found PR: " + pr_num + " with enhancement label")
+            enhancements += 1
+            match_found += 1
+        if len(labels) == 0:
+            print("-- Found PR: " + pr_num + " with no labels")
+            labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "No labels"])
+            uncategorised += 1
+        elif match_found == 0:
+            print("-- Found PR: " + pr_num + " with no matching label")
+            labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "No label match"])
+            uncategorised += 1
+        if match_found > 1:
+            print("-- Found PR: " + pr_num + " with too many labels")
+            labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "Too many labels"])
+            uncategorised += 1
+
+
 
     print("\nwriting tables")
     labels_to_add_txt = labels_added_table.get_string()
@@ -296,4 +410,3 @@ if __name__ == '__main__':
         print(file.read())
     file.close()
     print(("\nTable has been output to %s\n\n" % labels_file))
-

@@ -68,7 +68,7 @@ import os.path
 import re
 import sys
 from prettytable import PrettyTable
-
+import datetime
 
 def load_config():
     """
@@ -105,35 +105,90 @@ def merge(primary, secondary):
     return dict((str(key), primary.get(key) or secondary.get(key))
                 for key in set(secondary) | set(primary))
 
-def label_reconcile(label_string, text_string):
-
-    global issue_matched
+def label_reconcile(prtype_text,label_to_add):
+    
+    global issue_matched_count
     global issue_labels_mismatch
     global issue_all_bad
     global bad_issue_count
-    global no_match
+    global no_match_count
+    global issue_desc_exist
+    global issue_label_exist
+    global issue_missing_labels
+    global issue_improvement_rename
+    global labels_mismatched
+    global labels_added
+    global labels_matched
+    global labels_all_bad
+
+    if issue_matched_count == 1:
+        labels_matched += 1
+        print("---- Matching label found - no action")
+    else:
+        if issue_desc_exist > 1 or issue_label_exist > 1:
+            print("XXXX Too many label or description matches")
+            labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype_text, "Label/description mismatch"])
+            labels_mismatched += 1
+        else:
+            if issue_desc_exist > 0 and issue_label_exist > 0:
+                print("XXXX Label and description don't match")
+                labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype_text, "Label/description mismatch"])
+                labels_mismatched += 1
+
+            elif (issue_label_exist > 0 and issue_desc_exist == 0):
+                print("XXX Label without description")
+                labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype_text, "Label without description"])
+                labels_mismatched += 1
+
+            elif issue_desc_exist == 1 and issue_label_exist == 0:
+                labels_added += 1
+                add_label_res =  "++++ label '" + label_to_add[5:] + "' added"
+                print(add_label_res)
+                add_label_text = add_label_res[5:]
+                labels_added_table.add_row([pr_num, pr.title.strip(), prtype_text, add_label_text])
+                if update_labels:
+                    pr.add_to_labels(label_to_add)
+
+            elif no_match_count == len(label_names):
+                labels_all_bad += 1
+                labels_all_bad_table.add_row([pr_num, pr.title.strip(), prtype_text, "No label or description"])
+                print("XXXX No type labels or type in description")
+            else:
+                print("**** Something went wrong, I'm confused")
+
+
+
+def label_match(label_string, text_string):
+
+    global issue_matched_count
+    global issue_labels_mismatch
+    global issue_all_bad
+    global bad_issue_count
+    global no_match_count
     global issue_desc_exist
     global issue_label_exist
     global label_to_add
     global issue_missing_labels
+    global issue_improvement_rename
 
     search_string = '.*- \[ ?x ?\] ' + text_string + ' .*'
     #print('--- Looking for ' + text_string + ' in description')
-    if re.search(search_string, str(issue.body), re.I):
-        issue_desc_exist += 1
-        if label_string in existing_label_names:
-            issue_label_exist += 1
-            issue_matched += 1
+    if label_string != "type:healthcheckrun":
+        if re.search(search_string, str(issue.body), re.I):
+            issue_desc_exist += 1
+            if label_string in existing_label_names:
+                issue_label_exist += 1
+                issue_matched_count += 1
+            else:
+                label_to_add = label_string
+                issue_missing_labels += 1
+                issue_labels_mismatch += 1
         else:
-            label_to_add = label_string
-            issue_missing_labels += 1
-            issue_labels_mismatch += 1
-    else:
-        if label_string in existing_label_names:
-            issue_label_exist += 1
-            issue_labels_mismatch += 1
-        else:
-            no_match += 1
+            if label_string in existing_label_names:
+                issue_label_exist += 1
+                issue_labels_mismatch += 1
+            else:
+                no_match_count += 1
 
 def get_commits():
     print("- Cloning repo, sorry, this could take a while")
@@ -148,6 +203,7 @@ def get_commits():
             ).decode("utf-8").split("\n")
     commits = []
     current_commit = {}
+    
     def save_current_commit():
         title = current_commit['message'][0]
         message = current_commit['message'][1:]
@@ -179,7 +235,7 @@ def get_commits():
     return commits
 
 
-# run the code...
+# run the code... 
 if __name__ == '__main__':
     print('\nInitialising...\n\n')
 
@@ -202,27 +258,37 @@ if __name__ == '__main__':
 
     repo = gh.get_repo(repo_name)
     labels_added_table = PrettyTable(["PR Number", "Title", "PR Type", "Result"])
-    labels_all_bad_table = PrettyTable(["PR Number", "Title", "PR Type", "Result"]) 
-    labels_mismatch_table = PrettyTable(["PR Number", "Title", "PR Type", "Result"])
+    labels_added_table.align["PR Type"] = "l"
     labels_added_table.align["Title"] = "l"
     labels_added_table.align["Result"] = "l"
-    labels_added_table.align["PR Type"] = "l"
     labels_added_table._max_width = {"Title":col_title_width}
+
+    labels_all_bad_table = PrettyTable(["PR Number", "Title", "PR Type", "Result"]) 
     labels_all_bad_table.align["Title"] = "l"
     labels_all_bad_table.align["Result"] = "l"
-    labels_added_table.align["PR Type"] = "l"
     labels_all_bad_table._max_width = {"Title":col_title_width}
+
+    labels_mismatch_table = PrettyTable(["PR Number", "Title", "PR Type", "Result"])
     labels_mismatch_table.align["Title"] = "l"
     labels_mismatch_table.align["Result"] = "l"
-    labels_added_table.align["PR Type"] = "l"
     labels_mismatch_table._max_width = {"Title":col_title_width}
+   
+    labels_old_table = PrettyTable(["PR Number", "Title", "PR Type", "Result"])
+    labels_old_table.align["Title"] = "l"
+    labels_old_table.align["Result"] = "l"
+    labels_old_table._max_width = {"Title":col_title_width}
 
     labels_file = "./labels"
-
     labels_added = 0
     labels_mismatched = 0
     labels_all_bad = 0
     labels_matched = 0
+
+    old_prs = 0
+    label_names = {"type:bug": "Bug fix", "type:enhancement": "Enhancement", "type:experimental-feature": \
+                "Experimental feature", "type:new_feature": "New feature", "type:cleanup": "Cleanup", \
+                "type:breaking_change": "Breaking change"}
+
 
     ## TODO - get commit -> commit date from tag on master.
     ## Searching seems a waste
@@ -251,20 +317,17 @@ if __name__ == '__main__':
     search_string = f"repo:" + repo_name + " is:open is:pr"
     issues = gh.search_issues(search_string)
 
-    print("- Processing Open Pull Request Issues/n")
+    print("- Processing Open Pull Request Issues\n")
     for issue in issues:
         existing_labels = []
         label = []
         existing_label_names = []
-        label_names = {"type:bug": "Bug fix", "type:enhancement": "Enhancement", "type:experimental-feature": \
-                      "Experimental feature", "type:new_feature": "New feature", "type:cleanup": "Cleanup", \
-                      "type:breaking_change": "Breaking change"}
-
-        issue_matched = 0
+        issue_matched_count = 0
         issue_labels_mismatch = 0
         issue_all_bad = 0
+        issue_improvement_rename = 1
         bad_issue_count = 0
-        no_match = 0
+        no_match_count = 0
         issue_desc_exist = 0
         issue_label_exist = 0
         label_to_add = ''
@@ -282,7 +345,7 @@ if __name__ == '__main__':
         if is_draft:
             prtype = 'Draft PR'
             if draft_pr_label not in existing_label_names:
-                print("---- Daft PR missing wip label - adding label")
+                print("**** Daft PR missing wip label - adding label")
                 labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "WIP label added"])
                 labels_added += 1
                 if update_labels:
@@ -290,47 +353,34 @@ if __name__ == '__main__':
         if not is_draft:
             prtype = 'PR'
             if draft_pr_label in existing_label_names:
-                print("---- PR with incorrect wip label - removing label")
+                print("**** PR with incorrect wip label - removing label")
                 labels_added_table.add_row([pr_num, pr.title.strip(), prtype, "WIP label removed"])
                 labels_added += 1
                 if update_labels:
                     pr.remove_from_labels("status:work-in-progress")
+        
+        creation_date = pr.created_at
+        check_date_old = datetime.datetime.now() - datetime.timedelta(days=365)
+        check_date_very_old = datetime.datetime.now() - datetime.timedelta(days=2*365)
+        if creation_date < check_date_very_old:
+            print("**** More than 2 years old - adding label")
+            old_prs += 1
+            labels_old_table.add_row([pr_num, pr.title.strip(), "Very old PR", "Add label age:2years_plus"])
+            if update_labels:
+                pr.remove_from_labels("age:1year_plus")
+                pr.add_to_labels("age:2years_plus")
+
+        elif creation_date < check_date_old:
+            print("**** More than 1 year old - adding label")
+            old_prs += 1
+            labels_old_table.add_row([pr_num, pr.title.strip(), "Old PR", "Add label age:1year_plus"])
+            if update_labels:
+                pr.add_to_labels("age:1year_plus")
 
         for label_name in label_names:
-            label_reconcile(label_name, label_names[label_name])
+            label_match(label_name, label_names[label_name])
 
-        # DEBUG -- print("labels: " + str(issue_label_exist) + "  desc: " + str(issue_desc_exist) + " no_matches: " + str(no_match) + " matches :" + str(issue_matched) + " missing labels: " + str(issue_missing_labels))
-        if issue_matched == 1:
-            labels_matched += 1
-            print("---- Matching 'type' label found - no action")
-        else:
-            if issue_desc_exist > 1 or issue_label_exist > 1:
-                print("---- Too many label or description matches")
-                labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label/description mismatch"])
-                labels_mismatched += 1
-            else:
-                if issue_desc_exist > 0 and issue_label_exist > 0:
-                    print("---- Label and description don't match")
-                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label/description mismatch"])
-                    labels_mismatched += 1
-                elif (issue_label_exist > 0 and issue_desc_exist == 0):
-                    print("---- Label without description")
-                    labels_mismatch_table.add_row([pr_num, pr.title.strip(), prtype, "Label without description"])
-                    labels_mismatched += 1
-                elif issue_missing_labels == 1:
-                    labels_added += 1
-                    add_label_res =  "label '" + label_to_add[5:] + "' added"
-                    print(add_label_res)
-                    labels_added_table.add_row([pr_num, pr.title.strip(), prtype, add_label_res])
-                    if update_labels:
-                        pr.add_to_labels(label_to_add)
-
-                elif no_match == len(label_names):
-                    labels_all_bad += 1
-                    labels_all_bad_table.add_row([pr_num, pr.title.strip(), prtype, "No label or description"])
-                    print("---- no type labels or type in description")
-                else:
-                    print("---- Something went wrong, I'm confused")
+        label_reconcile(prtype,label_to_add)
 
     print("\nEnumerating MERGED PRs in master\n")
 
@@ -343,46 +393,42 @@ if __name__ == '__main__':
     enhancements = 0
     match_found = 0
 
-
     print("\nProcessing Merged Pull Request Issues\n")
     for issue in issues:
-        match_found = 0
-        pr = issue.repository.get_pull(issue.number)
-        pr_commit_sha = pr.merge_commit_sha
+        existing_labels = []
         label = []
-        pr_num = str(pr.number)
-        labels = pr.labels
-        if [l.name for l in labels if l.name == 'type:new-feature']:
-            print("-- Found PR: " + pr_num + " with feature label")
-            match_found += 1
-            features += 1
-        if [l.name for l in labels if l.name == 'type:bug' or l.name == 'type:cleanup']:
-            print("-- Found PR: " + pr_num + " with bug or cleanup label")
-            fixes += 1
-            match_found += 1
-        if [l.name for l in labels if l.name=='l.name' == 'type:enhancement']:
-            print("-- Found PR: " + pr_num + " with enhancement label")
-            enhancements += 1
-            match_found += 1
-        if len(labels) == 0:
-            print("-- Found PR: " + pr_num + " with no labels")
-            labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "No labels"])
-            labels_all_bad += 1
-        elif match_found == 0:
-            print("-- Found PR: " + pr_num + " with no matching label")
-            labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "No label match"])
-            labels_all_bad += 1
-        if match_found > 1:
-            print("-- Found PR: " + pr_num + " with too many labels")
-            labels_all_bad_table.add_row([pr_num, pr.title.strip(), "MERGED", "Too many labels"])
-            labels_all_bad += 1
+        existing_label_names = []
+        issue_matched_count = 0
+        issue_labels_mismatch = 0
+        issue_all_bad = 0
+        issue_improvement_rename = 1
+        bad_issue_count = 0
+        no_match_count = 0
+        issue_desc_exist = 0
+        issue_label_exist = 0
+        label_to_add = ''
+        issue_missing_labels = 0
 
+        pr = issue.repository.get_pull(issue.number)
+        pr_num = str(pr.number)
+
+        print("\n-- Checking MERGED pr#: " + pr_num)
+        existing_labels = pr.labels
+
+        for label in existing_labels:
+            existing_label_names.append(label.name)
+
+        for label_name in label_names:
+            label_match(label_name, label_names[label_name])
+        
+        label_reconcile("MERGED",label_to_add)
 
 
     print("\nwriting tables")
     labels_to_add_txt = labels_added_table.get_string()
     labels_all_bad_txt = labels_all_bad_table.get_string()
     mismatched_labels_txt = labels_mismatch_table.get_string()
+    labels_old_txt = labels_old_table.get_string()
     report_title = 'Results of ' + repo_name + ' open PR label trawling\n'
     underline_length = len(report_title)
     underline = '=' * underline_length
@@ -405,6 +451,10 @@ if __name__ == '__main__':
         file.write('PRs without label or description\n\n')
         file.write(labels_all_bad_txt)
         file.write('\n%s Unmatched PRs\n\n' % str(labels_all_bad))
+
+        file.write('Old PRs\n\n')
+        file.write(labels_old_txt)
+        file.write('\n%s Old PRs\n\n' % str(old_prs))
     file.close()
     with open(labels_file ,"r") as file:
         print(file.read())
